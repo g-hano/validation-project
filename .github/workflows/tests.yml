@@ -1,0 +1,16 @@
+name: Kokoro TTS Tests
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          sudo apt-get install -y chromium-chromedriver
+      - name: Run Tests
+        run: python kokoro_test_automation.py --url http://localhost:5000

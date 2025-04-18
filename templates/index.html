@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kokoro TTS Web App</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Kokoro Text-to-Speech</h1>
+            <p>Convert your text to natural-sounding speech using Kokoro TTS</p>
+        </header>
+
+        <main>
+            <div class="selection-container">
+                <div class="language-selection">
+                    <label for="language-select">Language:</label>
+                    <select id="language-select">
+                        {% for language in voices_by_language.keys() %}
+                            <option value="{{ language }}">{{ language }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="voice-selection">
+                    <label for="voice-select">Voice:</label>
+                    <select id="voice-select">
+                        <!-- Voice options will be populated by JavaScript -->
+                    </select>
+                </div>
+            </div>
+
+            <div class="text-input">
+                <label for="text-area">Enter text to convert to speech:</label>
+                <textarea id="text-area" rows="6" placeholder="Type or paste your text here..."></textarea>
+            </div>
+
+            <div class="control-panel">
+                <button id="generate-btn" class="primary-btn">Generate Speech</button>
+                <div id="status" class="status"></div>
+            </div>
+
+            <div id="audio-container" class="audio-container hidden">
+                <h3>Generated Audio:</h3>
+                <audio id="audio-player" controls></audio>
+                <button id="download-btn" class="secondary-btn">Download Audio</button>
+            </div>
+        </main>
+
+        <footer>
+            <p>Powered by <a href="https://huggingface.co/jbetker/kokoro-tts-ko" target="_blank">Kokoro TTS</a> | Apache License 2.0</p>
+        </footer>
+    </div>
+
+    <script>
+        // Store the voices data directly from the server (this is pre-rendered by Flask)
+        const voicesByLanguage = JSON.parse('{{ voices_by_language | tojson | safe }}');
+        
+        let currentFilename = null;
+        
+        // DOM elements
+        const languageSelect = document.getElementById('language-select');
+        const voiceSelect = document.getElementById('voice-select');
+        const textArea = document.getElementById('text-area');
+        const generateBtn = document.getElementById('generate-btn');
+        const statusDisplay = document.getElementById('status');
+        const audioContainer = document.getElementById('audio-container');
+        const audioPlayer = document.getElementById('audio-player');
+        const downloadBtn = document.getElementById('download-btn');
+
+        // Update voice options when language changes
+        function updateVoiceOptions() {
+            const selectedLanguage = languageSelect.value;
+            const voices = voicesByLanguage[selectedLanguage] || [];
+            
+            // Clear current options
+            voiceSelect.innerHTML = '';
+            
+            // Add new options
+            voices.forEach(voice => {
+                const option = document.createElement('option');
+                option.value = voice.code;
+                option.textContent = `${voice.name} (${voice.gender === 'm' ? 'Male' : 'Female'})`;
+                voiceSelect.appendChild(option);
+            });
+        }
+
+        // Initialize voice options
+        document.addEventListener('DOMContentLoaded', function() {
+            // Ensure voices are populated on initial load
+            updateVoiceOptions();
+        });
+        
+        // Update voices when language changes
+        languageSelect.addEventListener('change', updateVoiceOptions);
+
+        // Handle API errors better
+        function handleApiError(error) {
+            console.error('Error generating speech:', error);
+            
+            let errorMessage = 'An error occurred';
+            if (error.message) {
+                errorMessage = error.message;
+            } else if (typeof error === 'string') {
+                errorMessage = error;
+            }
+            
+            // Limit error message length for display
+            if (errorMessage.length > 100) {
+                errorMessage = errorMessage.substring(0, 100) + '...';
+            }
+            
+            statusDisplay.textContent = `Error: ${errorMessage}`;
+            statusDisplay.className = 'status error';
+            
+            // Hide audio container if there was an error
+            audioContainer.classList.add('hidden');
+        }
+
+        // Generate speech function
+        generateBtn.addEventListener('click', async () => {
+            const text = textArea.value.trim();
+            const voice = voiceSelect.value;
+            
+            if (!text) {
+                statusDisplay.textContent = 'Please enter some text';
+                statusDisplay.className = 'status error';
+                return;
+            }
+            
+            // Show loading state
+            generateBtn.disabled = true;
+            statusDisplay.textContent = 'Generating speech...';
+            statusDisplay.className = 'status loading';
+            audioContainer.classList.add('hidden');
+            
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text, voice }),
+                });
+                
+                // Check for HTTP errors
+                if (!response.ok) {
+                    throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                
+                // Update status
+                statusDisplay.textContent = `Generated ${data.segments} segment(s) successfully!`;
+                statusDisplay.className = 'status success';
+                
+                // Show audio player
+                currentFilename = data.filename;
+                // Only use the filename part, not the full path
+                const audioFileName = currentFilename.split('/').pop();
+                audioPlayer.src = `/audio/${audioFileName}`;
+                audioContainer.classList.remove('hidden');
+                
+                // Set download link
+                downloadBtn.onclick = () => {
+                    const a = document.createElement('a');
+                    a.href = `/audio/${audioFileName}`;
+                    a.download = audioFileName;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                };
+                
+            } catch (error) {
+                handleApiError(error);
+            } finally {
+                generateBtn.disabled = false;
+            }
+        });
+        
+        // Add basic error handling for audio playback
+        audioPlayer.addEventListener('error', (e) => {
+            console.error('Audio playback error:', e);
+            statusDisplay.textContent = 'Error playing audio';
+            statusDisplay.className = 'status error';
+        });
+    </script>
+</body>
+</html>

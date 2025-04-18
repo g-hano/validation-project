@@ -1,0 +1,9 @@
+kokoro
+flask
+soundfile
+selenium
+seaborn
+pandas
+matplotlib
+tensorflow
+torch

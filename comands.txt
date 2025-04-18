@@ -1,0 +1,9 @@
+git init 
+git config --global user.email "mcihann19@hotmail.com" 
+git config --global user.name "Cihan Yalçın" 
+git remote add origin https://github.com/g-hano/validation-project.git 
+git checkout -b main 
+git add . 
+git commit -m "Initial commit: Add Kokoro TTS testing framework" 
+git push -u origin main 
+git checkout -b feature/add-documentation
